@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<!--
+  v2: LIFF 認証ゲートウェイ（GAS+LIFF の iframe 非互換を回避する前段ページ）
+
+  ■ 役割
+    GAS の HtmlService はページを二重 iframe で包むため LIFF が正しく動かない
+    （liff.init がセッションを張れず liff.login がブロックされる）。
+    本ページを「GAS の外（トップレベルで動く静的ホスティング）」に置き、ここで LIFF 認証だけを行い、
+    取得した ID トークンを付けて GAS の各ページ（?page=events 等）へリダイレクトする。
+
+  ■ ホスティング（main リポジトリは private 維持のため、本ファイルは別の公開/無料静的ホストへ）
+    - 推奨A: ゲートウェイ専用の「公開リポジトリ」を作り GitHub Pages で配信（秘密情報を含まないため公開可）
+    - 推奨B: Cloudflare Pages / Netlify（private リポジトリからでも無料配信可）
+    - いずれも HTTPS のトップレベル URL になること（GAS 配下は不可）
+
+  ■ LINE Developers 設定
+    LIFF アプリの「エンドポイント URL」を、本ページの公開 URL に設定する
+    （例: https://<user>.github.io/<gatewayrepo>/liff-gateway.html）。
+    リッチメニュー等は liff.line.me/<id>?liff.state=?page=events 形式（Code.gs:buildLiffPageUrl_）。
+    → LINE がエンドポイント（本ページ）に ?page=events を付けて開く → 本ページが GAS へ橋渡し。
+
+  ■ 設定値（秘密ではない。デプロイ前に2つ埋める）
+-->
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>河辺区水利管理システム</title>
+  <style>
+    body { font-family: 'Noto Sans JP', sans-serif; background: #F5F2EC; color: #6B6B6B;
+           display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 24px; }
+    .msg { font-size: 14px; line-height: 1.8; }
+  </style>
+</head>
+<body>
+  <div class="msg" id="msg">読み込み中…</div>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    /* ▼ 設定（いずれも秘密情報ではない） */
+    var LIFF_ID = '2010399948-cWTafalg';   // LINEログインチャネルのLIFF ID
+    var GAS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxnxYaL-whqia9DMC9UUlXbmf1k5mwndit4a-HFCJE4IB6tfdVB0sSx9gjDO57HhNbx/exec';  // GASウェブアプリの /exec URL（= APP_DEPLOY_URL。/a/<domain>/ は付けない＝外部ユーザー向けポータブル形）
+
+    /* 遷移を許可する page（不正値の弾き） */
+    var ALLOWED_PAGES = ['events', 'register', 'shiryou', 'shutsudou', 'admin', 'map', 'main'];
+
+    function fail(text) { document.getElementById('msg').textContent = text; }
+
+    function go(page, token) {
+      var sep = GAS_EXEC_URL.indexOf('?') >= 0 ? '&' : '?';
+      var url = GAS_EXEC_URL + sep + 'page=' + encodeURIComponent(page) + (token ? ('&t=' + encodeURIComponent(token)) : '');
+      window.location.replace(url);
+    }
+
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var page = params.get('page') || 'events';
+      if (ALLOWED_PAGES.indexOf(page) < 0) page = 'events';
+      if (!LIFF_ID || LIFF_ID.indexOf('PUT_') === 0 || !GAS_EXEC_URL || GAS_EXEC_URL.indexOf('PUT_') === 0) {
+        fail('セットアップが未完了です（LIFF_ID / GAS_EXEC_URL 未設定）。担当者にお問い合わせください。');
+        return;
+      }
+      if (typeof liff === 'undefined') { fail('LIFF SDK を読み込めませんでした。開き直してください。'); return; }
+      liff.init({ liffId: LIFF_ID }).then(function () {
+        if (!liff.isLoggedIn()) { liff.login(); return; }   // 静的ホスト上＝トップレベルなのでログイン遷移も正常
+        var token = liff.getIDToken() || '';
+        if (!token) { fail('認証情報を取得できませんでした。LINE アプリから開き直してください。'); return; }
+        go(page, token);
+      }).catch(function (e) {
+        fail('認証に失敗しました（' + (e && e.message ? e.message : e) + '）。開き直してください。');
+      });
+    })();
+  </script>
+</body>
+</html>
