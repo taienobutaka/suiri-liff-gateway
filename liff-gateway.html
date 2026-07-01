@@ -57,7 +57,10 @@
 
     function go(page, token) {
       var sep = GAS_EXEC_URL.indexOf('?') >= 0 ? '&' : '?';
-      var url = GAS_EXEC_URL + sep + 'page=' + encodeURIComponent(page) + (token ? ('&t=' + encodeURIComponent(token)) : '');
+      // キャッシュ回避: LINE の webview が古い /exec ページを使い回さないよう毎回ユニークな値を付ける
+      // （GAS の doGet は未知パラメータを無視するため安全）。再デプロイ後に旧画面が残る問題を防ぐ。
+      var cb = String(Date.now()) + Math.floor(Math.random() * 1e6);
+      var url = GAS_EXEC_URL + sep + 'page=' + encodeURIComponent(page) + (token ? ('&t=' + encodeURIComponent(token)) : '') + '&_cb=' + cb;
       // GAS ページを当ページ（トップレベル）内の全画面 iframe で開く。
       // GAS の「このアプリは〜が作成」免責バナーはトップレベル遷移時のみ表示され、
       // 第三者オリジンの iframe 内では出ないため非表示にできる（各ページは XFrameOptionsMode.ALLOWALL）。
