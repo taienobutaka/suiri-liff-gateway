@@ -47,6 +47,14 @@
 
     function fail(text) { document.getElementById('msg').textContent = text; }
 
+    // GAS ページ（iframe 内・例: 登録完了）からの要求で LIFF を閉じ、
+    // リッチメニュー（LINEチャット）へ戻す。liff.init 済みの本ページ（トップレベル）でのみ closeWindow が有効。
+    window.addEventListener('message', function (e) {
+      if (e && e.data && e.data.suiri === 'liffClose') {
+        try { if (typeof liff !== 'undefined' && liff.closeWindow) liff.closeWindow(); } catch (_) {}
+      }
+    });
+
     function go(page, token) {
       var sep = GAS_EXEC_URL.indexOf('?') >= 0 ? '&' : '?';
       var url = GAS_EXEC_URL + sep + 'page=' + encodeURIComponent(page) + (token ? ('&t=' + encodeURIComponent(token)) : '');
